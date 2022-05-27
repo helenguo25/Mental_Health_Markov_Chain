@@ -1,0 +1,375 @@
+---
+title: 'MATH 183: Modeling'
+author: "Shivang Mehta, Gianna Wu, Helen Guo, Sam Pedley"
+date: "April 24, 2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+
+## Section 0: Environment Setup
+knitr::opts_chunk$set(echo = TRUE)
+library(readxl)
+library(dplyr)
+library(matrixcalc)
+library(boot)
+library(ggplot2)
+```
+
+
+```{r}
+## Section 1: Import Data 
+
+## Change the filepath to reflect where you have stored the excel file
+survey_data <- read_excel("C:/Users/Helen/Documents/Math 183/Survey_Data.xlsx", sheet = "clean", col_types = c("numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric", "numeric"), na = ".")
+
+```
+
+
+```{r}
+## Section 2: Functions to calculate probability matrices
+
+prob_mat <- function(start, end){
+
+  ## start: mental health indicator at start of time period 
+  ## end: mental health indicator at end of time period
+  
+  ## Create empty 4x4 matrix to store results 
+  results <- matrix(data = 0, nrow = 4, ncol = 4)
+  
+  ## Store input vectors as dataframe
+  df <- as.data.frame(cbind(start, end))
+  
+  ## Calculate transition probability for each class
+  ## To do so, first filter by mental health at start, calculate number of individuals in each state (denom)
+  ## Then filter by mental health at start and end, calculate number of individuals in each state (num)
+  ## Finally, calculate transition probability 
+  
+  df <- df %>% 
+          group_by(start) %>% mutate(denom = n()) %>% 
+                              group_by(start, end) %>% mutate(num = n()) %>% 
+                                                       mutate(prob_calc = num/denom)
+  
+  ## The following loop extracts the transition probabilities from the process above and stores them in a matrix
+  
+  for(i in 1:4){
+    for(j in 1:4){
+    calc <- df %>% 
+             filter(start == i) %>% filter(end == j) 
+    results[i,j] <- mean(calc$prob_calc)
+    if(is.na(results[i,j])){
+      results[i,j] = 0
+    }
+    rm(calc)
+    }
+  }
+  
+  return(results)
+}
+
+prob_mat_filter <- function(start, end, filt, filt_value){
+
+  ## start: mental health indicator at start of time period 
+  ## end: mental health indicator at end of time period
+  ## filt: variable you would like to filter by 
+  ## filt_value: value of filt you would like to filter by
+  
+  ## Create empty 4x4 matrix to store results 
+  results <- matrix(data = 0, nrow = 4, ncol = 4)
+  
+  ## Store input vectors as dataframe
+  df <- as.data.frame(do.call(cbind, list(start, end, filt)))
+  colnames(df) <- c("start", "end", "filt")
+  
+  ## Calculate transition probability for each class
+  ## To do so, first filter by chosen value of filter variable, then mental health at start, calculate number of         individuals in each state (denom)
+  ## Then filter by mental health at start and end, calculate number of individuals in each state (num)
+  ## Finally, calculate transition probability = num/denom
+  
+  df <- df %>% 
+              filter(filt == filt_value ) %>%  group_by(start) %>% 
+                                              mutate(denom = n()) %>% group_by(start, end) %>% 
+                                              mutate(num = n()) %>% mutate(prob_calc = num/denom)
+  
+  ## The following loop extracts the transition probabilities from the process above and stores them in a matrix
+  
+  for(i in 1:4){
+    for(j in 1:4){
+    calc <- df %>% 
+             filter(start == i) %>% filter(end == j) 
+    results[i,j] <- mean(calc$prob_calc)
+    if(is.na(results[i,j])){
+      results[i,j] = 0
+    }
+    rm(calc)
+    }
+  }
+  
+  return(results)
+}
+
+```
+
+
+```{r}
+
+## Section 3: Functions to calculate stationary distributions
+
+stat_dist <- function(df){
+
+  ## df: dataframe containing (start,end)
+  colnames(df) <- c("start", "end")
+  
+  ## Create empty 4x4 matrix to store results 
+  results <- matrix(data = 0, nrow = 4, ncol = 4)
+  
+  ## Calculate transition probability for each class
+  ## To do so, first filter by mental health at start, calculate number of individuals in each state (denom)
+  ## Then filter by mental health at start and end, calculate number of individuals in each state (num)
+  ## Finally, calculate transition probability 
+  
+  df <- df %>% 
+          group_by(start) %>% mutate(denom = n()) %>% 
+                              group_by(start, end) %>% mutate(num = n()) %>% 
+                                                       mutate(prob_calc = num/denom)
+  
+  ## The following loop extracts the transition probabilities from the process above and stores them in a matrix
+  
+  for(i in 1:4){
+    for(j in 1:4){
+    calc <- df %>% 
+             filter(start == i) %>% filter(end == j) 
+    results[i,j] <- mean(calc$prob_calc)
+    if(is.na(results[i,j])){
+      results[i,j] = 0
+    }
+    rm(calc)
+    }
+  }
+  
+results <- matrix.power(results,50)
+stationary_dist <- results[1,]
+
+return(stationary_dist)
+  
+}
+
+
+stat_dist_filter <- function(df, filt, filt_value){
+
+  ## df: dataframe containing (start,end)
+  ## filt_value: value of filt you would like to filter by
+  
+  ## Create empty 4x4 matrix to store results 
+  results <- matrix(data = 0, nrow = 4, ncol = 4)
+  
+  ## Store input vectors as dataframe
+  df <- as.data.frame(do.call(cbind, list(start, end, filt)))
+  colnames(df) <- c("start", "end", "filt")
+  
+  ## Calculate transition probability for each class
+  ## To do so, first filter by chosen value of filter variable, then mental health at start, calculate number of         individuals in each state (denom)
+  ## Then filter by mental health at start and end, calculate number of individuals in each state (num)
+  ## Finally, calculate transition probability = num/denom
+  
+  df <- df %>% 
+              filter(filt == filt_value ) %>%  group_by(start) %>% 
+                                              mutate(denom = n()) %>% group_by(start, end) %>% 
+                                              mutate(num = n()) %>% mutate(prob_calc = num/denom)
+  
+  ## The following loop extracts the transition probabilities from the process above and stores them in a matrix
+  
+  for(i in 1:4){
+    for(j in 1:4){
+    calc <- df %>% 
+             filter(start == i) %>% filter(end == j) 
+    results[i,j] <- mean(calc$prob_calc)
+    if(is.na(results[i,j])){
+      results[i,j] = 0
+    }
+    rm(calc)
+    }
+  }
+  
+results <- matrix.power(results,50)
+stationary_dist <- results[1,]
+
+return(stationary_dist)
+  
+}
+
+
+```
+
+
+```{r}
+
+## Section 4: Functions to calculate bootstrap of stationary dist 
+
+stat_dist_boot <- function(df, indices){
+
+  ## df: dataframe containing (start,end)
+  df <- df[indices,]
+  colnames(df) <- c("start", "end")
+  df <- as.data.frame(df)
+  
+  ## Create empty 4x4 matrix to store results 
+  results <- matrix(data = 0, nrow = 4, ncol = 4)
+  
+  ## Calculate transition probability for each class
+  ## To do so, first filter by mental health at start, calculate number of individuals in each state (denom)
+  ## Then filter by mental health at start and end, calculate number of individuals in each state (num)
+  ## Finally, calculate transition probability 
+  
+  df <- df %>% 
+          group_by(start) %>% mutate(denom = n()) %>% 
+                              group_by(start, end) %>% mutate(num = n()) %>% 
+                                                       mutate(prob_calc = num/denom)
+  
+  ## The following loop extracts the transition probabilities from the process above and stores them in a matrix
+  
+  for(i in 1:4){
+    for(j in 1:4){
+    calc <- df %>% 
+             filter(start == i) %>% filter(end == j) 
+    results[i,j] <- mean(calc$prob_calc)
+    if(is.na(results[i,j])){
+      results[i,j] = 0
+    }
+    rm(calc)
+    }
+  }
+  
+results <- matrix.power(results,50)
+stationary_dist <- results[1,]
+
+return(stationary_dist)
+  
+}
+
+stat_dist_filter_boot <- function(df, indices){
+
+  ## df: dataframe containing (start,end, filt, filt_value)
+  filt <- df[,3]
+  filt_value <- sum(df[,4])/nrow(df)
+  df <- df[,-c(3,4)]
+  df <- df[indices,]
+  colnames(df) <- c("start", "end")
+  df <- as.data.frame(df)
+  
+  ## Create empty 4x4 matrix to store results 
+  results <- matrix(data = 0, nrow = 4, ncol = 4)
+  
+  ## Calculate transition probability for each class
+  ## To do so, first filter by chosen value of filter variable, then mental health at start, calculate number of         individuals in each state (denom)
+  ## Then filter by mental health at start and end, calculate number of individuals in each state (num)
+  ## Finally, calculate transition probability = num/denom
+  
+  df <- df %>% 
+              filter(filt == filt_value ) %>%  group_by(start) %>% 
+                                              mutate(denom = n()) %>% group_by(start, end) %>% 
+                                              mutate(num = n()) %>% mutate(prob_calc = num/denom)
+  
+  ## The following loop extracts the transition probabilities from the process above and stores them in a matrix
+  
+  for(i in 1:4){
+    for(j in 1:4){
+    calc <- df %>% 
+             filter(start == i) %>% filter(end == j) 
+    results[i,j] <- mean(calc$prob_calc)
+    if(is.na(results[i,j])){
+      results[i,j] = 0
+    }
+    rm(calc)
+    }
+  }
+  
+results <- matrix.power(results,50)
+stationary_dist <- results[1,]
+
+return(stationary_dist)
+  
+}
+
+boot_stat_dist <- function(df, stat_func){
+  
+  ## df: dataframe containing (start,end)
+  ## stat_func: the stat_dist function
+  
+  
+  ## call bootstrapping function
+  results <- boot(df, R = 100, stat_func)
+  
+  ## Return results
+  return(results)
+  
+}
+
+boot_stat_dist_filter <- function(df, stat_func, filt, filt_value){
+  
+  ## df: dataframe containing (start,end)
+  ## stat_func: the stat_dist function
+  ## filt: variable to use as filter 
+  ## filt_value: value of filt to filter by
+  
+  df <- as.data.frame(do.call(cbind, list(df, filt, filt_value)))
+  colnames(df) <- c("start", "end", "filt", "filt_value")
+
+  
+  
+  ## call bootstrapping function
+  results <- boot(df, R = 100, stat_func)
+  
+  ## Return results
+  return(results)
+  
+	
+state=c(rep("1" , 2) , rep("2" , 2) , rep("3" , 2) , rep("4" , 2) )
+group=rep(c("First-Years" , "Sophomores") , 4)
+distribution=c(0.1020146,0.1875120  ,0.2596856 ,0.4197341  ,0.4239982 ,0.2240316 ,0.2143015  ,0.2240316 )
+data=data.frame(state,distribution,value)
+color=rep(c("mediumpurple","darksalmon"),4)
+sd=c(0.06436415,0.14256700,0.05713390,0.13332482,0.07239627,0.08671918,0.05933962, 0.08671918)
+
+ggplot(data, aes(fill=group, y=distribution, x=state,colour=group)) + 
+    geom_bar(position="dodge", stat="identity",fill=color) + geom_errorbar(aes(x=state, ymin=distribution-sd, ymax=distribution+sd), width=0.2, colour="black", size=1, position = position_dodge(1))
+
+state=c(rep("1" , 2) , rep("2" , 2) , rep("3" , 2) , rep("4" , 2) )
+group=rep(c("1st Year White Students" , "1st Year API Students") , 4)
+distribution=c(0.1651151, 0.03759398 ,0.3285154, 0.42105263 ,0.2802548 ,0.24812030 ,0.2261146 ,0.29323308)
+data=data.frame(state,distribution,value)
+color=rep(c("mediumpurple","darksalmon"),4)
+sd=c(0.08754657,0.2138482,0.09476321,0.2000314,0.09105947,0.1575947,0.08886833, 0.1436998)
+
+state=c(rep("1" , 2) , rep("2" , 2) , rep("3" , 2) , rep("4" , 2) )
+group=rep(c("1st Year Lower-Income Students" , "1st Year Higher-Income Students") , 4)
+distribution=c(0.0000000, 0.19607843 ,0.4772727 , 0.07843137 , 0.3181818 ,0.41176471  ,0.2045455 ,0.31372549 )
+data=data.frame(state,distribution,value)
+color=rep(c("mediumpurple","darksalmon"),4)
+sd=c(0.3735495,0.4250686,0.2728001,0.2624643,0.2796140,0.2422279,0.1608172, 0.1724806)           
+state=c(rep("1" , 2) , rep("2" , 2) , rep("3" , 2) , rep("4" , 2) )
+group=rep(c("1st Year Males" , "1st Year Females") , 4)
+distribution=c(0.07185629  , 0.1174332 ,0.34730539  , 0.2670208 , 0.47904192  ,0.3852929     ,0.10179641   ,0.2302530 )
+data=data.frame(state,distribution,value)
+color=rep(c("mediumpurple","darksalmon"),4)
+sd=c(0.2653287,0.10283320 ,0.1822206,0.08161635 ,0.1892858,0.07677645,0.1196212, 0.07199033)
+
+
+
+
+```
+
+
+```{r}
+
+## Section 5: Analysis
+
+a <- boot_stat_dist(as.data.frame(cbind(survey_data$before_college, survey_data$sem_one_first)), stat_dist_boot)
+b <- boot_stat_dist_filter(as.data.frame(cbind(survey_data$sem_one_first, survey_data$sem_one_second)), stat_dist_filter_boot, survey_data$gender, 0)
+
+
+``
+
+
+
+
